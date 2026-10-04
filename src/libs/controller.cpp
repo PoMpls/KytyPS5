@@ -12,12 +12,14 @@
 #include "libs/errno.h"
 #include "libs/libs.h"
 #include "libs/padData.h"
+#include "libs/triggerEffectState.h"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <vector>
 
 namespace Libs::Controller {
@@ -120,6 +122,7 @@ public:
 	bool SetTriggerEffect(const PadTriggerEffectParam& param);
 	void  CycleSetting(Setting setting);
 	float GetSettingScale(Setting setting) const;
+	void GetTriggerEffectStates(int32_t states[2]);
 	void ReadState(ControllerState* state, bool* flag, int* count);
 	int  ReadStates(ControllerState* states, int states_num, bool* flag, int* count);
 
@@ -154,6 +157,7 @@ private:
 	PadTriggerEffectParam  m_trigger_effect {};
 	// Setting changes share the output lock; audio only needs an atomic scale snapshot.
 	std::array<std::atomic<uint32_t>, 3> m_setting_steps {};
+	std::array<std::array<uint8_t, 11>, 2> m_trigger_effects {};
 };
 
 static GameController* g_controller = nullptr;
@@ -411,6 +415,7 @@ void GameController::CheckActive() {
 	m_active_id     = new_active_id;
 	m_connected     = new_connected;
 	m_state         = {};
+	m_trigger_effects = {};
 	m_gyro_time     = 0;
 	m_up_reference_valid = false;
 	m_states_num    = 0;
@@ -760,7 +765,25 @@ bool GameController::SendTriggerEffect(const PadTriggerEffectParam& param) {
 	if (pad != nullptr && SDL_GetGamepadType(pad) == SDL_GAMEPAD_TYPE_PS5) {
 		(void)SDL_SendGamepadEffect(pad, &effect, sizeof(effect));
 	}
+	if ((param.trigger_mask & 1u) != 0) std::copy_n(effect.left_trigger, 11, m_trigger_effects[0].begin());
+	if ((param.trigger_mask & 2u) != 0) std::copy_n(effect.right_trigger, 11, m_trigger_effects[1].begin());
 	return true;
+}
+
+void GameController::GetTriggerEffectStates(int32_t states[2]) {
+	Common::LockGuard lock(m_mutex);
+	const int left = m_state.axes[static_cast<int>(Axis::TriggerLeft)];
+	const int right = m_state.axes[static_cast<int>(Axis::TriggerRight)];
+	states[0] = TriggerEffectState(m_trigger_effects[0], left);
+	states[1] = TriggerEffectState(m_trigger_effects[1], right);
+	static unsigned reports = 0;
+	static std::array<int32_t, 2> last {-1, -1};
+	if (reports < 32 && (last[0] != states[0] || last[1] != states[1])) {
+		std::fprintf(stderr, "Trigger state: pressure=%d,%d effect=%u,%u state=%d,%d\n",
+		             left, right, m_trigger_effects[0][0], m_trigger_effects[1][0], states[0], states[1]);
+		last = {states[0], states[1]};
+		++reports;
+	}
 }
 
 void GameController::GetConnectionInfo(bool* flag, int* count) {
@@ -851,6 +874,10 @@ void ResetInputState() {
 
 int GetActiveControllerId() {
 	return g_controller != nullptr ? g_controller->GetActiveControllerId() : -1;
+}
+
+void GetTriggerEffectStates(int32_t states[2]) {
+	g_controller->GetTriggerEffectStates(states);
 }
 
 int KYTY_SYSV_ABI PadInit() {

@@ -13,7 +13,9 @@
 #include "common/platform/sysTimer.h"
 #include "common/stringUtils.h"
 
+#include <algorithm>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
@@ -66,7 +68,33 @@ static DWORD GetCacheAccessType(sys_file_cache_type_t t) {
 void SysFileRead(void* data, uint32_t size, sys_file_t& f, uint32_t* bytes_read) {
 	if (f.type == SYS_FILE_FILE) {
 		DWORD w = 0;
-		ReadFile(f.handle, data, size, &w, nullptr);
+		const auto ok = ReadFile(f.handle, data, size, &w, nullptr);
+		if (!ok) {
+			const auto error = GetLastError();
+			std::fprintf(stderr, "Windows file read failed: error=%lu requested=%u read=%lu buffer=%p\n",
+			             error, size, w, data);
+			// A kernel copy cannot invoke the guest GPU page-fault handler.
+			// Buffer-access failures without transferred bytes leave the offset unchanged.
+			// Retry into ordinary host memory, then use a CPU copy so the existing
+			// handler can resolve the destination's protection. Do not retry EOF
+			// or unrelated I/O errors, or change destination page permissions here.
+			if ((error == ERROR_NOACCESS || error == ERROR_INVALID_USER_BUFFER) && w == 0 && size != 0 && data != nullptr) {
+				std::vector<uint8_t> staging(std::min<uint32_t>(size, 64 * 1024));
+				while (w < size) {
+					const auto chunk = std::min<DWORD>(size - w, static_cast<DWORD>(staging.size()));
+					DWORD transferred = 0;
+					if (!ReadFile(f.handle, staging.data(), chunk, &transferred, nullptr)) {
+						break;
+					}
+					std::memcpy(static_cast<uint8_t*>(data) + w, staging.data(), transferred);
+					w += transferred;
+					if (transferred < chunk) {
+						break;
+					}
+				}
+				std::fprintf(stderr, "Windows staged read: error=%lu requested=%u recovered=%lu\n", error, size, w);
+			}
+		}
 		if (bytes_read != nullptr) {
 			*bytes_read = w;
 		}
