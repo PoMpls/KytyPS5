@@ -1,5 +1,6 @@
 // Exercise the production module with real SDL streams and fake USB endpoints.
 #include <SDL3/SDL.h>
+#include "libs/triggerEffectState.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -561,6 +562,19 @@ void TestAudioDefaultResumeFailure() {
 } // namespace
 
 int main() {
+	std::array<uint8_t, 11> trigger {};
+	Check(Libs::Controller::TriggerEffectState(trigger, 255) == 0, "disabled effect reported active");
+	trigger[0] = 0x25;
+	trigger[1] = (1u << 2) | (1u << 7);
+	Check(Libs::Controller::TriggerEffectState(trigger, 0) == 3, "weapon idle state");
+	Check(Libs::Controller::TriggerEffectState(trigger, 52) == 4, "weapon partially pressed state");
+	Check(Libs::Controller::TriggerEffectState(trigger, 179) == 4, "weapon before release threshold");
+	Check(Libs::Controller::TriggerEffectState(trigger, 180) == 5, "weapon release threshold");
+	Check(Libs::Controller::TriggerEffectState(trigger, 255) == 5, "keyboard/full pressure weapon state");
+	Check(Libs::Controller::TriggerEffectState(trigger, 0) == 3, "weapon release resets state");
+	trigger[0] = 0x21;
+	Check(Libs::Controller::TriggerEffectState(trigger, 0) == 1, "feedback idle state");
+	Check(Libs::Controller::TriggerEffectState(trigger, 52) == 2, "feedback pressed state");
 	SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
 	TestAudioSpeakerFallback();
 	TestAudioSpeakerRouting();

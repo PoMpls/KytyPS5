@@ -25,6 +25,7 @@
 #include <array>
 #include <bit>
 #include <cstring>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -47,6 +48,22 @@ struct TileManager::ScratchPool {
 		}
 	}
 	KYTY_CLASS_NO_COPY(ScratchPool);
+
+	// Only completed GPU work enters idle; never release pending scheduler allocations.
+	uint64_t TrimIdle() {
+		std::vector<Scratch> released;
+		uint64_t bytes = 0;
+		{
+			std::scoped_lock lock {mutex};
+			released.swap(idle);
+			bytes = idle_bytes;
+			idle_bytes = 0;
+		}
+		for (const auto& scratch: released) {
+			vmaDestroyBuffer(allocator, scratch.buffer, scratch.allocation);
+		}
+		return bytes;
+	}
 
 	// The smallest idle buffer holding size bytes, unless it is more than twice as large.
 	bool Take(uint64_t size, Scratch& out) {
@@ -159,6 +176,10 @@ static bool ScratchPoolEnabled() {
 	return !(ab && AbFeatureOff());
 }
 
+uint64_t TileManager::TrimIdleScratch() {
+	return m_scratch_pool->TrimIdle();
+}
+
 TileManager::Scratch TileManager::AllocateScratch(uint64_t size) {
 	EXIT_IF(size == 0);
 	Scratch scratch {};
@@ -176,9 +197,18 @@ TileManager::Scratch TileManager::AllocateScratch(uint64_t size) {
 	VkBuffer      buffer = VK_NULL_HANDLE;
 	VmaAllocation memory = nullptr;
 	const auto    raw    = static_cast<VkBufferCreateInfo>(create);
-	RequireVulkanSuccess(static_cast<vk::Result>(vmaCreateBuffer(
-	                         m_graphics.allocator, &raw, &allocate, &buffer, &memory, nullptr)),
-	                     "allocate TileManager scratch buffer");
+	auto result = vmaCreateBuffer(m_graphics.allocator, &raw, &allocate, &buffer, &memory, nullptr);
+	if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+		const auto released = TrimIdleScratch();
+		std::fprintf(stderr, "TileManager allocation pressure: requested=%llu freed_idle=%llu\n",
+		             static_cast<unsigned long long>(create.size),
+		             static_cast<unsigned long long>(released));
+		if (released != 0) {
+			result = vmaCreateBuffer(m_graphics.allocator, &raw, &allocate, &buffer, &memory, nullptr);
+			std::fprintf(stderr, "TileManager allocation retry: result=%d\n", static_cast<int>(result));
+		}
+	}
+	RequireVulkanSuccess(static_cast<vk::Result>(result), "allocate TileManager scratch buffer");
 	return {buffer, memory, size, create.size};
 }
 

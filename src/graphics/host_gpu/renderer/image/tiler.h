@@ -120,6 +120,7 @@ private:
 	};
 
 	[[nodiscard]] Scratch         AllocateScratch(uint64_t size);
+	uint64_t                      TrimIdleScratch();
 	[[nodiscard]] StorageBinding  BindStorage(Result buffer, uint64_t size) const;
 	[[nodiscard]] static uint32_t ConversionRows(uint64_t offset, uint64_t row_stride,
 	                                             uint64_t active, uint32_t remaining,

@@ -199,6 +199,9 @@ struct ImageTestAccess {
 };
 
 struct TileManagerTestAccess {
+  static uint64_t TrimIdle(TileManager &manager) {
+    return manager.TrimIdleScratch();
+  }
   static uint32_t ConversionRows(uint64_t offset, uint64_t row_stride,
                                  uint64_t active, uint32_t remaining,
                                  uint64_t alignment, uint64_t max_range,
@@ -1247,7 +1250,8 @@ void CheckCommandStreamPayloads() {
   Require(name, "other thread", other_thread_refused,
           "a thread that did not route the buffer got payload room");
   std::vector<int64_t> expected;
-  for (uint32_t i = 0; i < 3000; i++) {
+  // Cross the 64 MiB ring boundary while verifying every payload and ordering.
+  for (uint32_t i = 0; i < 100000; i++) {
     const uint32_t size = 8u + (i * 37u) % 1500u;
     auto *payload = ReserveRecordedCall(g_buffer, size);
     Require(name, "reserve", payload != nullptr, "the routing thread got no payload room");
@@ -15782,6 +15786,17 @@ public:
     StreamBuffer parameters(m_runtime_context, scheduler, MemoryUsage::Stream,
                             1u << 20);
     TileManager tile_manager(m_runtime_context, scheduler, parameters);
+    (void)tile_manager.GetScratchBuffer(64u << 10);
+    Require(name, "pending scratch retained",
+            TileManagerTestAccess::TrimIdle(tile_manager) == 0,
+            "trimming released scratch before its scheduler tick completed");
+    scheduler.Finish();
+    Require(name, "completed scratch released",
+            TileManagerTestAccess::TrimIdle(tile_manager) == (64u << 10),
+            "trimming did not release completed scratch");
+    Require(name, "empty scratch trim",
+            TileManagerTestAccess::TrimIdle(tile_manager) == 0,
+            "trimming an empty pool released scratch twice");
     constexpr uint64_t conversion_limit = 128ull << 20;
     Require(name, "D16 conversion chunk boundaries",
             TileManagerTestAccess::ConversionRows(0, 32ull << 10, 32ull << 10,
