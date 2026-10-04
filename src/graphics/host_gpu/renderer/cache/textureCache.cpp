@@ -2836,6 +2836,15 @@ bool TextureCache::CollectGarbage(bool pressure_only) {
 	if (m_graphics.CanReportMemoryUsage()) {
 		m_total_used_memory = m_graphics.GetDeviceMemoryUsage();
 	}
+	// Opt-in experiment: let the existing guest mip-stat relief react before allocation
+	// thrashing. Keep its in-use history and cooldown; never discard active GPU resources.
+	static const bool pressure_relief = [] {
+		const auto* value = std::getenv("KYTY_ASTRO_MEMORY_RELIEF");
+		return value != nullptr && std::strcmp(value, "1") == 0;
+	}();
+	if (pressure_relief && m_total_used_memory >= m_pressure_gc_memory) {
+		NoteStreamingThrash();
+	}
 	if (m_total_used_memory < (pressure_only ? m_pressure_gc_memory : m_trigger_gc_memory)) {
 		return false;
 	}
