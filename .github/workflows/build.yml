@@ -87,7 +87,8 @@ jobs:
           # windows-2022 provides zstd. A native pipeline preserves archive bytes on any pwsh version.
           Get-Command zstd.exe -ErrorAction Stop | Out-Null
           Write-Host 'Extracting LLVM from Zstandard...'
-          & cmd.exe /d /c "zstd.exe --decompress --stdout ""$archive"" | tar.exe -xf - --strip-components=1 -C C:\LLVM-23.1.2"
+          # LLVM's official archive uses a 1 GiB Zstandard window.
+          & cmd.exe /d /c "zstd.exe --decompress --long=30 --stdout ""$archive"" | tar.exe -xf - --strip-components=1 -C C:\LLVM-23.1.2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = & 'C:\LLVM-23.1.2\bin\clang-cl.exe' --version | Select-Object -First 1
           Write-Host $version
