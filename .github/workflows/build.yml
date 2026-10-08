@@ -72,14 +72,19 @@ jobs:
 
       - name: Set up LLVM 23.1.2
         shell: pwsh
+        timeout-minutes: 20
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'llvm-23.1.2.tar.xz'
-          Invoke-WebRequest -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/clang%2Bllvm-23.1.2-x86_64-pc-windows-msvc.tar.xz' -OutFile $archive
+          Write-Host 'Downloading the pinned LLVM archive...'
+          curl.exe --fail --location --retry 2 --connect-timeout 30 --max-time 600 --output $archive 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/clang%2Bllvm-23.1.2-x86_64-pc-windows-msvc.tar.xz'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'Download complete; verifying SHA256...'
           $expected = '8fb91cdc44fcbbdcf6b3ffd0a1f9859abd14a3c3aae4423c2b6d4a4f90bf0095'
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
             throw 'LLVM archive checksum mismatch.'
           }
           New-Item -ItemType Directory -Path 'C:\LLVM-23.1.2' | Out-Null
+          Write-Host 'Extracting LLVM...'
           tar -xf $archive --strip-components=1 -C 'C:\LLVM-23.1.2'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = & 'C:\LLVM-23.1.2\bin\clang-cl.exe' --version | Select-Object -First 1
