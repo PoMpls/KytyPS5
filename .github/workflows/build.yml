@@ -74,18 +74,20 @@ jobs:
         shell: pwsh
         timeout-minutes: 20
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP 'llvm-23.1.2.tar.xz'
+          $archive = Join-Path $env:RUNNER_TEMP 'llvm-23.1.2.tar.zst'
           Write-Host 'Downloading the pinned LLVM archive...'
-          curl.exe --fail --location --retry 2 --connect-timeout 30 --max-time 600 --output $archive 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/clang%2Bllvm-23.1.2-x86_64-pc-windows-msvc.tar.xz'
+          curl.exe --fail --location --retry 2 --connect-timeout 30 --max-time 600 --output $archive 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.2/clang%2Bllvm-23.1.2-x86_64-pc-windows-msvc.tar.zst'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host 'Download complete; verifying SHA256...'
-          $expected = '8fb91cdc44fcbbdcf6b3ffd0a1f9859abd14a3c3aae4423c2b6d4a4f90bf0095'
+          $expected = 'ceaee048142fece144752c6f6431cb0905a7a6160f78ab8cf5cf0b6216f99418'
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
             throw 'LLVM archive checksum mismatch.'
           }
           New-Item -ItemType Directory -Path 'C:\LLVM-23.1.2' | Out-Null
-          Write-Host 'Extracting LLVM...'
-          tar -xf $archive --strip-components=1 -C 'C:\LLVM-23.1.2'
+          # windows-2022 provides zstd. A native pipeline preserves archive bytes on any pwsh version.
+          Get-Command zstd.exe -ErrorAction Stop | Out-Null
+          Write-Host 'Extracting LLVM from Zstandard...'
+          & cmd.exe /d /c "zstd.exe --decompress --stdout ""$archive"" | tar.exe -xf - --strip-components=1 -C C:\LLVM-23.1.2"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $version = & 'C:\LLVM-23.1.2\bin\clang-cl.exe' --version | Select-Object -First 1
           Write-Host $version
