@@ -2214,6 +2214,13 @@ if(APPLE)
 endif()
 
 install(TARGETS kyty_emulator DESTINATION .)
+if(WIN32)
+	install(FILES
+		"${CMAKE_CURRENT_SOURCE_DIR}/tools/Launch-AstroBot.ps1"
+		"${CMAKE_CURRENT_SOURCE_DIR}/tools/Probar-AstroBot.cmd"
+		"${CMAKE_CURRENT_SOURCE_DIR}/tools/u59-preset.json"
+		DESTINATION .)
+endif()
 if(KYTY_BUILD_LAUNCHER)
 	add_subdirectory("${KYTY_SOURCE_DIR}/launcher" "${CMAKE_CURRENT_BINARY_DIR}/launcher")
 

@@ -268,6 +268,7 @@ void TestCondWaitUntil() {
 } // namespace
 
 int main() {
+	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	TestServicePriority();
 	TestYield();
 	TestYieldAndPauseMicro();

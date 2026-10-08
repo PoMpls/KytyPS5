@@ -1,4 +1,49 @@
-# KytyPS5 experimental
+# KytyPS5 - Astro Bot v5 (PoMpls)
+
+Esta rama, `astro-bot-jetsku-v5`, integra la base completa de
+[Jetsku/KytyPS5](https://github.com/Jetsku/KytyPS5/tree/f9e19582f0deac0d1226a7ce3faae30a9ab408ab)
+(U59 int16.1) para jugar a Astro Bot sin `_Patches`. Se conserva el historial y la
+autoria de Jetsku y upstream. La version anterior sigue en `astro-bot-bryan-v4`.
+
+Se mantiene la politica de mutex de nuestra v4 (`KYTY_CS_SPIN_COUNT=0`). La base
+de Jetsku ya incluye soluciones para las lecturas de archivos de Windows, la
+recuperacion limitada de memoria temporal y los gatillos adaptativos, ademas de
+su renderizado y shaders mas recientes; no se duplican esas implementaciones.
+
+**Arranque en Windows:** descarga el artefacto de la compilacion de esta rama en
+[GitHub Actions](https://github.com/PoMpls/KytyPS5/actions/workflows/build.yml),
+extraelo y ejecuta `Probar-AstroBot.cmd`. Busca `ASTRO-BOT.zar` en la carpeta
+`ps5` del Escritorio. Para otra ruta:
+
+```powershell
+.\Launch-AstroBot.ps1 -Game 'D:\Games\ASTRO-BOT.zar'
+```
+
+El script carga `u59-preset.json` y usa espanol de Espana, 1920x1080, modo
+Immediate, frecuencia vertical de 60 Hz, redzone y optimizacion Performance.
+No activa parches. La compilacion inicial de shaders puede provocar parones;
+las caches se conservan junto al ejecutable. Los registros de cada ejecucion
+quedan en una carpeta `test-fecha-hora`.
+
+Validacion local del 9 de octubre de 2026: el usuario confirmo una experiencia
+muy fluida en Astro Bot PPSA21564 v01.007.000 tras compilar shaders, con un
+Ryzen 9 9900X y Radeon RX 9070. Es una prueba en ese equipo, no una medicion
+comparativa con PS5 ni una garantia de rendimiento en otros equipos.
+Pasaron las pruebas de registros clear, mandos, configuracion de controles,
+archivos, scheduler, GPU tiler, SRT, BDA, generacion de ray tracing y BVH.
+La prueba `thread_service` de precision de temporizacion sigue fallando en este
+Windows tanto con el ajuste original de Jetsku (4000) como con el de v4 (0);
+no se han relajado sus requisitos. Los tests de calculo ya no exigen extensiones
+opcionales de rasterizado; los tests graficos conservan sus requisitos.
+
+La compilacion de GitHub usa LLVM 23.1.2, Qt 6.10.3, Release, IPO y el perfil
+PGO de Jetsku, igual que la candidata local. El perfil fue generado con otra
+version del compilador: las funciones cuyos datos no coincidan se optimizan
+sin perfil. GitHub ejecuta los tests seleccionados que no necesitan GPU; la
+validacion del juego y Vulkan se realizo localmente. Los cambios de integracion
+se prepararon con asistencia de Codex y la prueba del juego la hizo el usuario.
+
+## Documentacion heredada de Jetsku
 
 The main branch contains the U59 renderer, the validated Demon's Souls shader and
 compatibility changes, and the U59 integration work: command-processor and VRAM

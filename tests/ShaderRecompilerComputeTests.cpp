@@ -2801,7 +2801,7 @@ std::vector<u32> MakePassthroughVertexSpirv(bool layered, float clip_w = 1.0f) {
 
 class VulkanHarness {
 public:
-  VulkanHarness() { Init(); }
+  explicit VulkanHarness(bool compute_only = false) : m_compute_only(compute_only) { Init(); }
   ~VulkanHarness() { Destroy(); }
 
   VulkanHarness(const VulkanHarness &) = delete;
@@ -28517,6 +28517,11 @@ public:
   }
 
 private:
+  // Compute/transfer tests do not need the optional production rasterization
+  // extensions (notably provoking-vertex-last on some AMD drivers). Graphics
+  // tests retain the full requirements and cannot silently skip their checks.
+  bool m_compute_only = false;
+
   RenderContext &Renderer() {
     EXIT_IF(m_renderer == nullptr);
     return *m_renderer;
@@ -28555,11 +28560,11 @@ private:
       m_runtime_context.transfer_queue_family = m_transfer_family;
       m_runtime_context.transfer_queue = m_transfer_queue;
     }
-    m_runtime_context.attachment_feedback_loop_enabled = true;
-    m_runtime_context.provoking_vertex_last_enabled = true;
-    // The harness device requires and enables both (production rasterization features).
-    m_runtime_context.color_write_enable_enabled = true;
-    m_runtime_context.depth_clip_enable_enabled = true;
+    m_runtime_context.attachment_feedback_loop_enabled = !m_compute_only;
+    m_runtime_context.provoking_vertex_last_enabled = !m_compute_only;
+    // Graphics tests require both; compute-only tests leave rasterization disabled.
+    m_runtime_context.color_write_enable_enabled = !m_compute_only;
+    m_runtime_context.depth_clip_enable_enabled = !m_compute_only;
     m_runtime_context.storage_image_read_without_format_enabled =
         m_storage_image_read_without_format;
     m_runtime_context.sampler_filter_minmax_enabled = m_sampler_filter_minmax;
@@ -28829,13 +28834,13 @@ private:
             "image view minimum LOD is not supported");
     Require("VulkanHarness", "graphics", available_features12.shaderOutputLayer == true,
             "vertex layer output is not supported");
-    Require("VulkanHarness", "graphics", available_features.fillModeNonSolid &&
+    Require("VulkanHarness", "graphics", m_compute_only || (available_features.fillModeNonSolid &&
                 available_features.tessellationShader &&
                 available_depth_clip.depthClipEnable && available_clip_control.depthClipControl &&
                 available_color_write.colorWriteEnable &&
                 available_feedback_layout.attachmentFeedbackLoopLayout &&
                 available_feedback_dynamic.attachmentFeedbackLoopDynamicState &&
-                available_provoking_vertex.provokingVertexLast,
+                available_provoking_vertex.provokingVertexLast),
             "production rasterization features are not supported");
 
     float priority = 1.0f;
@@ -28924,7 +28929,8 @@ private:
     provoking_vertex.pNext = &feedback_dynamic;
     provoking_vertex.provokingVertexLast = available_provoking_vertex.provokingVertexLast;
     vk::PhysicalDeviceImageViewMinLodFeaturesEXT min_lod{};
-    min_lod.pNext = &provoking_vertex;
+    min_lod.pNext = m_compute_only ? static_cast<void *>(&derivatives)
+                                 : static_cast<void *>(&provoking_vertex);
     min_lod.minLod = true;
     device_info.pNext = &min_lod;
     // Like the emulator's device: robustBufferAccess2 when available, so shaders may leave plain
@@ -28953,8 +28959,8 @@ private:
     device_features.sampleRateShading = true;
     device_features.shaderInt64 = true;
     device_features.shaderFloat64 = available_features.shaderFloat64;
-    device_features.fillModeNonSolid = true;
-    device_features.tessellationShader = true;
+    device_features.fillModeNonSolid = !m_compute_only;
+    device_features.tessellationShader = !m_compute_only;
     // Optional, as in the emulator: native indirect draws.
     device_features.drawIndirectFirstInstance = available_features.drawIndirectFirstInstance;
     device_features.multiDrawIndirect = available_features.multiDrawIndirect;
@@ -28984,15 +28990,18 @@ private:
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
         VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,
         VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME,
-        VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME,
-        VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME,
-        VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME,
-        VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME,
-        VK_EXT_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_EXTENSION_NAME,
-        VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME,
         VK_KHR_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_EXTENSION_NAME,
         VK_EXT_SHADER_IMAGE_ATOMIC_INT64_EXTENSION_NAME,
         VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME};
+    if (!m_compute_only) {
+      device_extensions.insert(device_extensions.end(), {
+          VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME,
+          VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME,
+          VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME,
+          VK_EXT_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_EXTENSION_NAME,
+          VK_EXT_ATTACHMENT_FEEDBACK_LOOP_DYNAMIC_STATE_EXTENSION_NAME,
+          VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME});
+    }
     if (robustness2_supported) {
       device_extensions.push_back(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
     }
@@ -51508,7 +51517,7 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (argc == 2 && std::strcmp(argv[1], "--scheduler-only") == 0) {
-    VulkanHarness vulkan;
+    VulkanHarness vulkan(/*compute_only=*/true);
     vulkan.CheckSchedulerTimeline();
     vulkan.CheckSchedulerReadyOperations();
     return 0;
@@ -51651,7 +51660,7 @@ int main(int argc, char **argv) {
   if (argc == 2 && std::strcmp(argv[1], "--gpu-tiler-only") == 0) {
     CheckTileBlockBijection();
     CheckDetileCopyCoverage();
-    VulkanHarness vulkan;
+    VulkanHarness vulkan(/*compute_only=*/true);
     vulkan.CheckGpuTilerCpuParity();
     vulkan.CheckTilerImageDirect();
     return 0;
@@ -52220,12 +52229,12 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (argc == 2 && std::strcmp(argv[1], "--srt-variant-only") == 0) {
-    VulkanHarness vulkan;
+    VulkanHarness vulkan(/*compute_only=*/true);
     SrtVariantTests::RunAll(&vulkan);
     return 0;
   }
   if (argc == 2 && std::strcmp(argv[1], "--bda-writes-only") == 0) {
-    VulkanHarness vulkan;
+    VulkanHarness vulkan(/*compute_only=*/true);
     BdaWriteTests::RunAll(&vulkan);
     return 0;
   }
@@ -52235,7 +52244,7 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (argc == 2 && std::strcmp(argv[1], "--bvh-only") == 0) {
-    VulkanHarness vulkan;
+    VulkanHarness vulkan(/*compute_only=*/true);
     BvhTests::RunAll(&vulkan);
     return 0;
   }
