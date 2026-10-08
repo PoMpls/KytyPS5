@@ -154,7 +154,9 @@ jobs:
             if (Test-Path -LiteralPath (Join-Path $runtime $name)) { throw "Unexpected runtime data: $name" }
           }
           Copy-Item -LiteralPath 'README.md', 'LICENSE' -Destination $runtime
-          Copy-Item -LiteralPath 'LICENSES' -Destination $runtime -Recurse
+          $licenses = Join-Path $runtime 'licenses'
+          New-Item -ItemType Directory -Path $licenses -Force | Out-Null
+          Copy-Item -Path 'LICENSES/*' -Destination $licenses -Recurse -Force
           $fonts = Join-Path $runtime '3rdparty/tracy/profiler/src/font'
           New-Item -ItemType Directory -Path $fonts -Force | Out-Null
           Copy-Item -Path '3rdparty/tracy/profiler/src/font/Roboto-*.ttf' -Destination $fonts
