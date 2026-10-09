@@ -16,24 +16,6 @@ No activa parches. La compilacion inicial de shaders puede provocar parones;
 las caches se conservan junto al ejecutable. Los registros de cada ejecucion
 quedan en una carpeta `test-fecha-hora`.
 
-Validacion local del 9 de octubre de 2026: el usuario confirmo una experiencia
-muy fluida en Astro Bot PPSA21564 v01.007.000 tras compilar shaders, con un
-Ryzen 9 9900X y Radeon RX 9070. Es una prueba en ese equipo, no una medicion
-comparativa con PS5 ni una garantia de rendimiento en otros equipos.
-Pasaron las pruebas de registros clear, mandos, configuracion de controles,
-archivos, scheduler, GPU tiler, SRT, BDA, generacion de ray tracing y BVH.
-La prueba `thread_service` de precision de temporizacion sigue fallando en este
-Windows tanto con el ajuste original de Jetsku (4000) como con el de v4 (0);
-no se han relajado sus requisitos. Los tests de calculo ya no exigen extensiones
-opcionales de rasterizado; los tests graficos conservan sus requisitos.
-
-La compilacion de GitHub usa LLVM 23.1.2, Qt 6.10.3, Release, IPO y el perfil
-PGO de Jetsku, igual que la candidata local. El perfil fue generado con otra
-version del compilador: las funciones cuyos datos no coincidan se optimizan
-sin perfil. GitHub ejecuta los tests seleccionados que no necesitan GPU; la
-validacion del juego y Vulkan se realizo localmente. Los cambios de integracion
-se prepararon con asistencia de Codex y la prueba del juego la hizo el usuario.
-
 ## Documentacion heredada de Jetsku
 
 The main branch contains the U59 renderer, the validated Demon's Souls shader and
