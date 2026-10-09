@@ -10,16 +10,7 @@ de Jetsku ya incluye soluciones para las lecturas de archivos de Windows, la
 recuperacion limitada de memoria temporal y los gatillos adaptativos, ademas de
 su renderizado y shaders mas recientes; no se duplican esas implementaciones.
 
-**Arranque en Windows:** descarga el artefacto de la compilacion de esta rama en
-[GitHub Actions](https://github.com/PoMpls/KytyPS5/actions/workflows/build.yml),
-extraelo y ejecuta `Probar-AstroBot.cmd`. Busca `ASTRO-BOT.zar` en la carpeta
-`ps5` del Escritorio. Para otra ruta:
-
-```powershell
-.\Launch-AstroBot.ps1 -Game 'D:\Games\ASTRO-BOT.zar'
-```
-
-El script carga `u59-preset.json` y usa espanol de Espana, 1920x1080, modo
+El script carga `u59-preset.json` y usa español de España, 1920x1080, modo
 Immediate, frecuencia vertical de 60 Hz, redzone y optimizacion Performance.
 No activa parches. La compilacion inicial de shaders puede provocar parones;
 las caches se conservan junto al ejecutable. Los registros de cada ejecucion
